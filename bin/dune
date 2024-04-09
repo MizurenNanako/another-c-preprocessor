@@ -1,9 +1,9 @@
 (ocamllex lexer)
 
-(menhir
- (modules parser)
- (flags --dump)
- (infer true))
+; (menhir
+;  (modules parser)
+;  (flags --dump)
+;  (infer true))
 
 (executable
  (public_name acppo)
