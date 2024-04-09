@@ -1,0 +1,11 @@
+(ocamllex lexer)
+
+(menhir
+ (modules parser)
+ (flags --dump)
+ (infer true))
+
+(executable
+ (public_name acppo)
+ (name main)
+ (libraries acppo))

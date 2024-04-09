@@ -1,0 +1,6 @@
+# dune init project acppo ./
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Shared cache location: /home/cgt/.cache/dune/db
+# Workspace root: /home/cgt/Repos/ocaml/another-c-preprocessor
+# Auto-detected concurrency: 16
