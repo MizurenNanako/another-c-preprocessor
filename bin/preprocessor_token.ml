@@ -11,29 +11,21 @@ module PPToken = struct
     | Punctuator of string
     | Eof
     | Other of string
-
-  let token_ctx tok =
-    match tok with
-    | Whitespace n -> Printf.sprintf "<ws:%i>" n
-    | Newline -> "<br>"
-    | PPstr (c, x) -> Printf.sprintf "<str(%c):\"%s\">" c x
-    | LPAREN -> "<L>"
-    | RPAREN -> "<R>"
-    | COMMA -> "<comma>"
-    | Identifier x -> Printf.sprintf "<id:\"%s\">" x
-    | PPnum x -> Printf.sprintf "<num:\"%s\">" x
-    | Punctuator x -> Printf.sprintf "<op:\"%s\">" x
-    | Other x -> Printf.sprintf "<other:\"%s\">" x
-    | Eof -> "<eof>"
+    | Cmd_Line1 of int
+    | Cmd_Line2 of int * string
+    | Cmd_Include of bool * string
+    | Cmd_Define1 of string (* name *)
+    | Cmd_Define2 of string * string (* name, ctx *)
+    | Cmd_Define3 of string * string list * string (* name, param, ctx *)
 
   let token_repr tok =
     match tok with
     | Whitespace n -> String.make n ' '
-    | Newline -> "\n"
     | PPstr (c, x) -> Printf.sprintf "%c%s%c" c x c
     | LPAREN -> "("
     | RPAREN -> ")"
     | COMMA -> ","
     | Identifier x | PPnum x | Punctuator x | Other x -> x
     | Eof -> "<eof>"
+    | _ -> "\n" (* All instructions and newline *)
 end

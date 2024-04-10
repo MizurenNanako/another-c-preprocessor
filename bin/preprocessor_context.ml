@@ -1,11 +1,13 @@
 module PPCtx = struct
+  open Preprocessor_token
+
   module Macro = struct
     type t = {
       m_trigger : Preprocessor_token.PPToken.pp_token;
-      m_body : body list;
+      m_body : body_token list;
     }
 
-    and body =
+    and body_token =
       | PLACEHOLDER of int (* Will be replaced when expand *)
       | TOKEN of Preprocessor_token.PPToken.pp_token (* Will remain *)
 
@@ -21,11 +23,27 @@ module PPCtx = struct
       in
       let f = check_param parameters 1 in
       List.map f replacement
+
+    let _body_repr b =
+      match b with
+      | PLACEHOLDER n -> Printf.sprintf "_%d" n
+      | TOKEN k -> PPToken.token_repr k
+
+    let repr t =
+      let rec _repr body =
+        match body with
+        | [] -> ""
+        | [ lst ] -> Printf.sprintf "%s" (_body_repr lst)
+        | hd :: tl -> Printf.sprintf "%s, %s" (_body_repr hd) (_repr tl)
+      in
+      Printf.sprintf "<sym:\"%s\", body:\"%s\">"
+        (PPToken.token_repr t.m_trigger)
+        (_repr t.m_body)
   end
 
   module SymbolTable = Set.Make (Macro)
 
-  type t = { sym_table : SymbolTable.t }
+  type t = { mutable sym_table : SymbolTable.t }
 
   let make () = { sym_table = SymbolTable.empty }
 
@@ -37,22 +55,20 @@ module PPCtx = struct
     | None -> false
 
   let add_symbol (self : t) sym =
-    {
-      sym_table =
-        SymbolTable.add { m_trigger = sym; m_body = [] } self.sym_table;
-    }
+    self.sym_table <-
+      SymbolTable.add { m_trigger = sym; m_body = [] } self.sym_table
 
   let add_macro_parsed (self : t) sym syms =
-    {
-      sym_table =
-        SymbolTable.add { m_trigger = sym; m_body = syms } self.sym_table;
-    }
+    self.sym_table <-
+      SymbolTable.add { m_trigger = sym; m_body = syms } self.sym_table
 
   let add_macro (self : t) sym param reps =
-    {
-      sym_table =
-        SymbolTable.add
-          { m_trigger = sym; m_body = Macro.parse param reps }
-          self.sym_table;
-    }
+    self.sym_table <-
+      SymbolTable.add
+        { m_trigger = sym; m_body = Macro.parse param reps }
+        self.sym_table
+
+  let remove_symbol (self : t) sym =
+    self.sym_table <-
+      SymbolTable.remove { m_trigger = sym; m_body = [] } self.sym_table
 end
