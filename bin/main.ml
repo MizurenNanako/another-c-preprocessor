@@ -40,20 +40,32 @@ let run (context : PPCtx.t) =
           _common (fun () ->
               _run (fetch_filename is_sys file) out_ch;
               mark_line lexbuf.Lexing.lex_curr_p out_ch)
-      | Cmd_Define1 tok ->
-          _common (fun () -> PPCtx.add_symbol context (Identifier tok))
+      | Cmd_Define1 tok -> _common (fun () -> PPCtx.add_symbol context tok)
+      | Cmd_Define2 (n, tks) ->
+          _common (fun () -> PPCtx.add_macro_parsed context n tks)
+      | Cmd_Define3 (n, p, k) ->
+          _common (fun () -> PPCtx.add_macro context n p k)
       | _ as x ->
           Printf.fprintf out_ch "%s" (PPToken.token_repr x);
           loop (Lexer.pp_token lexbuf)
     in
-    loop (Lexer.pp_token lexbuf)
+    try loop (Lexer.pp_token lexbuf)
+    with e ->
+      Printf.eprintf "%s:%i:%i\n" lexbuf.lex_curr_p.pos_fname
+        lexbuf.lex_curr_p.pos_lnum
+        (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol + 1);
+      raise e
   in
   _run
 
 let () =
   let out_ch = Out_channel.open_text "output.out" in
   let context = PPCtx.make () in
-  try run context Sys.argv.(1) out_ch
+  try
+    run context Sys.argv.(1) out_ch;
+    PPCtx.SymbolTable.iter
+      (fun macro -> Printf.eprintf "macro%s\n" @@ PPCtx.Macro.repr macro)
+      context.sym_table
   with _ as e ->
     Out_channel.flush out_ch;
     raise e

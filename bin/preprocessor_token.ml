@@ -15,8 +15,9 @@ module PPToken = struct
     | Cmd_Line2 of int * string
     | Cmd_Include of bool * string
     | Cmd_Define1 of string (* name *)
-    | Cmd_Define2 of string * string (* name, ctx *)
-    | Cmd_Define3 of string * string list * string (* name, param, ctx *)
+    | Cmd_Define2 of string * pp_token list (* name, ctx *)
+    | Cmd_Define3 of
+        string * pp_token list * pp_token list (* name, param, ctx *)
 
   let token_repr tok =
     match tok with

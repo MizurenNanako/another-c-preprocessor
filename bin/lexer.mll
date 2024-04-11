@@ -58,15 +58,15 @@ and cmd_include = parse
 | _ { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_define = parse
-| (identifier as id) ws+ '\n'
+| (identifier as id) ws* '\n'
     { 
         new_line lexbuf;
         Cmd_Define1 id
     }
-| (identifier as id) ws+ ([^ '\n']+ as ctx) '\n'
+| (identifier as id) ws+
     {
         new_line lexbuf;
-        Cmd_Define2 (id, ctx)
+        Cmd_Define2 (id, cmd_define_ctx [] lexbuf)
     }
 | (identifier as id) '('
     {
@@ -76,10 +76,19 @@ and cmd_define = parse
 | _ { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_define_param lst = parse
-| identifier as e            { cmd_define_param (e :: lst) lexbuf }
-| ws? ',' ws?                { cmd_define_param lst lexbuf }
-| ")" ws* ([^ '\n']+ as ctx) { new_line lexbuf; (List.rev lst, ctx) }
+| identifier as e { cmd_define_param ((Identifier e) :: lst) lexbuf }
+| ws? ',' ws?     { cmd_define_param lst lexbuf }
+| ")" ws*         { (List.rev lst, cmd_define_ctx [] lexbuf) }
 | _ { raise (SyntaxError ("Invaild macro param: " ^ Lexing.lexeme lexbuf)) }
+
+and cmd_define_ctx lst = parse
+| identifier         { cmd_define_ctx ((Identifier (lexeme lexbuf))::lst) lexbuf }
+| ppnumber           { cmd_define_ctx ((PPnum (lexeme lexbuf))::lst) lexbuf }
+| ('\"' | '\'') as d { cmd_define_ctx ((pp_string d (Buffer.create 17) lexbuf)::lst) lexbuf }
+| punctuator         { cmd_define_ctx ((Punctuator (lexeme lexbuf))::lst) lexbuf }
+| [' ' '\t']+        { cmd_define_ctx ((Whitespace (lexbuf.lex_curr_pos - lexbuf.lex_start_pos))::lst) lexbuf }
+| '\n'? eof| '\n'    { new_line lexbuf; List.rev lst }
+| _                  { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_line = parse
 | ((['1' - '9'] digit*) as a) ws+ '\"' ( filename as b) '\"' ws* '\n'
