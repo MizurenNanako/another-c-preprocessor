@@ -1,4 +1,6 @@
 module PPToken = struct
+  exception ConcatenationError of string
+
   type pp_token =
     | Whitespace of int (* len *)
     | Newline
@@ -29,4 +31,14 @@ module PPToken = struct
     | Identifier x | PPnum x | Punctuator x | Other x -> x
     | Eof -> "<eof>"
     | _ -> "\n" (* All instructions and newline *)
+
+  let token_concate t1 t2 =
+    match (t1, t2) with
+    | Identifier a, Identifier b -> Some (Identifier (a ^ b))
+    | Identifier a, PPnum b -> Some (Identifier (a ^ b))
+    | PPnum a, Identifier b -> Some (PPnum (a ^ b))
+    | PPnum a, PPnum b -> Some (PPnum (a ^ b))
+    | Punctuator a, Punctuator b -> Some (Punctuator (a ^ b))
+    | Punctuator _, _ -> None
+    | a, b -> raise (ConcatenationError (token_repr a ^ token_repr b))
 end

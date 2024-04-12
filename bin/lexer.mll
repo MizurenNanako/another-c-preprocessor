@@ -85,8 +85,12 @@ and cmd_define_ctx lst = parse
 | identifier         { cmd_define_ctx ((Identifier (lexeme lexbuf))::lst) lexbuf }
 | ppnumber           { cmd_define_ctx ((PPnum (lexeme lexbuf))::lst) lexbuf }
 | ('\"' | '\'') as d { cmd_define_ctx ((pp_string d (Buffer.create 17) lexbuf)::lst) lexbuf }
+| '('                { cmd_define_ctx (LPAREN::lst) lexbuf }
+| ')'                { cmd_define_ctx (RPAREN::lst) lexbuf }
+| ','                { cmd_define_ctx (COMMA::lst) lexbuf }
 | punctuator         { cmd_define_ctx ((Punctuator (lexeme lexbuf))::lst) lexbuf }
-| [' ' '\t']+        { cmd_define_ctx ((Whitespace (lexbuf.lex_curr_pos - lexbuf.lex_start_pos))::lst) lexbuf }
+| [' ' '\t']+        { cmd_define_ctx lst lexbuf }
+(* | [' ' '\t']+        { cmd_define_ctx ((Whitespace (lexbuf.lex_curr_pos - lexbuf.lex_start_pos))::lst) lexbuf } *)
 | '\n'? eof| '\n'    { new_line lexbuf; List.rev lst }
 | _                  { raise (SyntaxError (lexeme lexbuf)) }
 
