@@ -81,7 +81,7 @@ module Parser = struct
       _print_lnum lexbuf.Lexing.lex_curr_p out_channel;
 
       let rec loop (t : PPToken.pp_token) =
-        let _common c =
+        let _act c =
           output_char out_channel '\n';
           c ();
           _print_lnum lexbuf.Lexing.lex_curr_p out_channel;
@@ -91,50 +91,67 @@ module Parser = struct
         let mcp = { cp with pos_lnum = cp.pos_lnum - 1 } in
         match t with
         | Eof -> output_string out_channel "\n" (* keep newline at end *)
-        | Newline -> _common (fun () -> ())
-        | Cmd_Line1 n ->
-            _common (fun () -> Printf.fprintf out_channel "#line %i\n" n)
-        | Cmd_Line2 (n, m) ->
-            _common (fun () ->
-                Printf.fprintf out_channel "#line %i \"%s\"\n" n m)
-        | Cmd_Include (is_sys, file) ->
-            _common (fun () ->
-                _run (Resource.fetch_filename is_sys file) out_channel;
-                _mark_line cp out_channel)
-        | Cmd_Define1 tok ->
-            _common (fun () -> PPCtx.add_symbol context tok mcp)
-        | Cmd_Define2 (n, tks) ->
-            _common (fun () -> PPCtx.add_macro_parsed context n tks mcp)
-        | Cmd_Define3 (n, p, k) ->
-            _common (fun () -> PPCtx.add_macro context n p k mcp)
-        | Identifier id -> (
-            match
-              PPCtx.SymbolTable.find_opt
-                { PPCtx.Macro.dummy with m_trigger = id }
-                context.sym_table
-            with
-            | None ->
-                output_string out_channel id;
-                loop (Lexer.pp_token lexbuf)
-            | Some macro ->
-                output_string out_channel "\n";
-                _mark_line macro.pos out_channel;
-                output_string out_channel
-                  (String.make
-                     (lexbuf.lex_start_p.pos_cnum - lexbuf.lex_start_p.pos_bol)
-                     ' ');
-                _expand_macro macro out_channel lexbuf;
-                output_string out_channel "\n";
-                (* _mark_line with pos updated in macro parsing. *)
-                _mark_line lexbuf.lex_curr_p out_channel;
-                output_string out_channel
-                  (String.make
-                     (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol)
-                     ' ');
-                loop (Lexer.pp_token lexbuf))
-        | _ as x ->
-            output_string out_channel (PPToken.token_repr x);
-            loop (Lexer.pp_token lexbuf)
+        | Newline -> _act (fun () -> ())
+        | Cmd_Else -> _act (fun () -> PPCtx.state_invert context)
+        | Cmd_Endif -> _act (fun () -> PPCtx.state_enable context)
+        | _ -> (
+            match context.PPCtx.active_state with
+            | true -> (
+                match t with
+                | Cmd_Line1 n ->
+                    _act (fun () -> Printf.fprintf out_channel "#line %i\n" n)
+                | Cmd_Line2 (n, m) ->
+                    _act (fun () ->
+                        Printf.fprintf out_channel "#line %i \"%s\"\n" n m)
+                | Cmd_Include (is_sys, file) ->
+                    _act (fun () ->
+                        _run (Resource.fetch_filename is_sys file) out_channel;
+                        _mark_line cp out_channel)
+                | Cmd_Define1 tok ->
+                    _act (fun () -> PPCtx.add_symbol context tok mcp)
+                | Cmd_Define2 (n, tks) ->
+                    _act (fun () -> PPCtx.add_macro_parsed context n tks mcp)
+                | Cmd_Define3 (n, p, k) ->
+                    _act (fun () -> PPCtx.add_macro context n p k mcp)
+                | Cmd_Undef n -> _act (fun () -> PPCtx.remove_symbol context n)
+                | Cmd_Ifdef n -> _act (fun () -> PPCtx.state_ifdef context n)
+                | Cmd_Ifndef n -> _act (fun () -> PPCtx.state_ifndef context n)
+                | Identifier id -> (
+                    match
+                      PPCtx.SymbolTable.find_opt
+                        { PPCtx.Macro.dummy with m_trigger = id }
+                        context.sym_table
+                    with
+                    | None ->
+                        output_string out_channel id;
+                        loop (Lexer.pp_token lexbuf)
+                    | Some macro ->
+                        output_string out_channel "\n";
+                        _mark_line macro.pos out_channel;
+                        output_string out_channel
+                          (String.make
+                             (lexbuf.lex_start_p.pos_cnum
+                            - lexbuf.lex_start_p.pos_bol)
+                             ' ');
+                        _expand_macro macro out_channel lexbuf;
+                        output_string out_channel "\n";
+                        (* _mark_line with pos updated in macro parsing. *)
+                        _mark_line lexbuf.lex_curr_p out_channel;
+                        output_string out_channel
+                          (String.make
+                             (lexbuf.lex_curr_p.pos_cnum
+                            - lexbuf.lex_curr_p.pos_bol)
+                             ' ');
+                        loop (Lexer.pp_token lexbuf))
+                | _ as x ->
+                    output_string out_channel (PPToken.token_repr x);
+                    loop (Lexer.pp_token lexbuf))
+            | false -> (
+                match t with
+                | Cmd_Line1 _ | Cmd_Line2 _ | Cmd_Include _ | Cmd_Define1 _
+                | Cmd_Define2 _ | Cmd_Define3 _ | Cmd_Ifdef _ | Cmd_Ifndef _ ->
+                    _act (fun () -> ())
+                | _ -> loop (Lexer.pp_token lexbuf)))
       in
       try loop (Lexer.pp_token lexbuf)
       with e ->

@@ -39,6 +39,16 @@ rule pp_token = parse
 | hash "include" ws* { cmd_include lexbuf }
 | hash "define" ws+  { cmd_define lexbuf }
 | hash "line" ws+    { cmd_line lexbuf }
+| hash "undef" ws+ (identifier as id) ws* ('\n' | eof)
+                     { new_line lexbuf; Cmd_Undef id }
+| hash "ifdef" ws+ (identifier as id) ws* ('\n' | eof)
+                     { new_line lexbuf; Cmd_Ifdef id }
+| hash "ifndef" ws+ (identifier as id) ws* ('\n' | eof)
+                     { new_line lexbuf; Cmd_Ifndef id }
+| hash "else" ws* ('\n' | eof)
+                     { new_line lexbuf; Cmd_Else }
+| hash "endif" ws* ('\n' | eof)
+                     { new_line lexbuf; Cmd_Endif }
 | identifier         { Identifier (lexeme lexbuf) }
 | ppnumber           { PPnum (lexeme lexbuf) }
 | ('\"' | '\'') as d { pp_string d (Buffer.create 17) lexbuf }
@@ -53,12 +63,12 @@ rule pp_token = parse
 | _                  { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_include = parse
-| '<' (filename as a) '>' '\n' { new_line lexbuf; Cmd_Include (true, a) }
-| '\"' (filename as a) '\"' '\n' { new_line lexbuf; Cmd_Include (false, a) }
+| '<' (filename as a) '>' ('\n' | eof) { new_line lexbuf; Cmd_Include (true, a) }
+| '\"' (filename as a) '\"' ('\n' | eof) { new_line lexbuf; Cmd_Include (false, a) }
 | _ { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_define = parse
-| (identifier as id) ws* '\n'
+| (identifier as id) ws* ('\n' | eof)
     { 
         new_line lexbuf;
         Cmd_Define1 id

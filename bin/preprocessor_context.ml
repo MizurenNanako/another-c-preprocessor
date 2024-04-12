@@ -37,14 +37,14 @@ module PPCtx = struct
       let f = check_param parameters 1 in
       List.map f replacement
 
-    let parse_tokens_from_raw raw =
+    (* let parse_tokens_from_raw raw =
       let lexbuf = Lexing.from_string raw in
       let rec loop (tok : PPToken.pp_token) lst =
         match tok with
         | Eof -> lst
         | x -> loop (Lexer.pp_token lexbuf) (x :: lst)
       in
-      loop (Lexer.pp_token lexbuf) []
+      loop (Lexer.pp_token lexbuf) [] *)
 
     let _body_repr b =
       match b with
@@ -67,19 +67,9 @@ module PPCtx = struct
 
     (** From params to body *)
     let _expand_to_body (t : t) (ptoks : PPToken.pp_token list list) =
-      (* List.iter
-         (fun l ->
-           List.iter
-             (fun k ->
-               print_string (PPToken.token_repr k);
-               print_string ",")
-             l;
-           print_newline ())
-         ptoks; *)
       let f b =
         match b with
         | PLACEHOLDER n ->
-            (* Printf.eprintf "(%i)" n; *)
             let target = List.nth ptoks (n - 1) in
             List.map (fun tk -> TOKEN tk) target
         | k -> [ k ]
@@ -111,20 +101,20 @@ module PPCtx = struct
 
   module SymbolTable = Set.Make (Macro)
 
-  type t = { mutable sym_table : SymbolTable.t }
+  type t = { mutable sym_table : SymbolTable.t; mutable active_state : bool }
 
-  let make () = { sym_table = SymbolTable.empty }
+  let make () = { sym_table = SymbolTable.empty; active_state = true }
 
-  let has_symbol (self : t) sym =
+  let has_symbol self sym =
     SymbolTable.exists (fun x -> x.m_trigger = sym) self.sym_table
 
-  let add_symbol (self : t) sym pos =
+  let add_symbol self sym pos =
     self.sym_table <-
       SymbolTable.add
         { m_trigger = sym; m_body = []; m_param_cnt = 0; pos }
         self.sym_table
 
-  let add_macro_parsed (self : t) sym syms pos =
+  let add_macro_parsed self sym syms pos =
     self.sym_table <-
       SymbolTable.add
         {
@@ -135,7 +125,7 @@ module PPCtx = struct
         }
         self.sym_table
 
-  let add_macro (self : t) sym param reps pos =
+  let add_macro self sym param reps pos =
     self.sym_table <-
       SymbolTable.add
         {
@@ -146,7 +136,13 @@ module PPCtx = struct
         }
         self.sym_table
 
-  let remove_symbol (self : t) sym =
+  let remove_symbol self sym =
     self.sym_table <-
       SymbolTable.filter (fun x -> x.m_trigger <> sym) self.sym_table
+
+  let state_enable self = self.active_state <- true
+  let state_disable self = self.active_state <- false
+  let state_invert self = self.active_state <- not self.active_state
+  let state_ifdef self sym = self.active_state <- has_symbol self sym
+  let state_ifndef self sym = self.active_state <- not (has_symbol self sym)
 end
