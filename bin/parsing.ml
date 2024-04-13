@@ -5,78 +5,85 @@ module Parser = struct
 
   let _print_lnum (lcp : Lexing.position) out_ch =
     (* Printf.fprintf out_ch "%-12s:%4i:" lcp.pos_fname lcp.pos_lnum *)
-    ignore lcp;
-    ignore out_ch
+    ignore (lcp, out_ch)
 
   let _mark_line (lcp : Lexing.position) out_ch =
     Printf.fprintf out_ch "#line %i \"%s\"\n" lcp.pos_lnum lcp.pos_fname
+
+  let _get_params lexbuf =
+    let rec _f (level : int) (ptoks : PPToken.pp_token list list) (cnt : int) =
+      match Lexer.pp_token lexbuf with
+      | LPAREN -> (
+          match level with
+          | 0 -> (*Start*) _f 1 ptoks 1
+          | n ->
+              _f
+                (n + 1) (*increased paren level*)
+                (match ptoks with
+                | [] -> (LPAREN :: []) :: []
+                | hd :: tl -> (LPAREN :: hd) :: tl)
+                cnt)
+      | RPAREN -> (
+          match level with
+          | 1 -> (*End*) (List.rev ptoks, cnt)
+          | n ->
+              _f
+                (n - 1) (*decreased paren level*)
+                (match ptoks with
+                | [] -> (RPAREN :: []) :: []
+                | hd :: tl -> (RPAREN :: hd) :: tl)
+                cnt)
+      | COMMA -> (
+          match level with
+          | 1 ->
+              (*Sep*)
+              _f 1
+                (match ptoks with
+                | [] -> []
+                | [] :: tl -> [] :: [] :: tl
+                | hd :: tl -> [] :: List.rev hd :: tl)
+                (cnt + 1)
+          | n ->
+              _f n (*unchanged paren level*)
+                (match ptoks with
+                | [] -> (COMMA :: []) :: []
+                | hd :: tl -> (COMMA :: hd) :: tl)
+                cnt)
+      | Whitespace _ ->
+          _f level
+            (match ptoks with [] -> [] :: [] | hd :: tl -> hd :: tl)
+            cnt
+      | _ as tk ->
+          _f level
+            (match ptoks with
+            | [] -> (tk :: []) :: []
+            | hd :: tl -> (tk :: hd) :: tl)
+            cnt
+    in
+    _f 0 [] 0
 
   let _expand_macro (macro : PPCtx.Macro.t) (out_ch : out_channel)
       (lexbuf : Lexing.lexbuf) =
     match macro.m_param_cnt with
     | 0 -> (*Just a symbol*) output_string out_ch (PPCtx.Macro.repr macro)
-    | n ->
+    | _ ->
         (* Macro Function, Parse to token lists *)
-        let rec get_params (level : int) (ptoks : PPToken.pp_token list list)
-            (cnt : int) =
-          match Lexer.pp_token lexbuf with
-          | LPAREN -> (
-              match level with
-              | 0 -> (*Start*) get_params 1 ptoks 1
-              | n ->
-                  get_params
-                    (n + 1) (*increased paren level*)
-                    (match ptoks with
-                    | [] -> (LPAREN :: []) :: []
-                    | hd :: tl -> (LPAREN :: hd) :: tl)
-                    cnt)
-          | RPAREN -> (
-              match level with
-              | 1 -> (*End*) (List.rev ptoks, cnt)
-              | n ->
-                  get_params
-                    (n - 1) (*decreased paren level*)
-                    (match ptoks with
-                    | [] -> (RPAREN :: []) :: []
-                    | hd :: tl -> (RPAREN :: hd) :: tl)
-                    cnt)
-          | COMMA -> (
-              match level with
-              | 1 ->
-                  (*Sep*)
-                  get_params 1
-                    (match ptoks with
-                    | [] -> []
-                    | [] :: tl -> [] :: [] :: tl
-                    | hd :: tl -> [] :: List.rev hd :: tl)
-                    (cnt + 1)
-              | n ->
-                  get_params n (*unchanged paren level*)
-                    (match ptoks with
-                    | [] -> (COMMA :: []) :: []
-                    | hd :: tl -> (COMMA :: hd) :: tl)
-                    cnt)
-          | _ as tk ->
-              get_params (n - 1)
-                (match ptoks with
-                | [] -> (tk :: []) :: []
-                | hd :: tl -> (tk :: hd) :: tl)
-                cnt
-        in
-        let a, b = get_params 0 [] 0 in
-        if b = macro.m_param_cnt then
-          let expanded = PPCtx.Macro.expand macro a in
+        let params, count = _get_params lexbuf in
+        if count = macro.m_param_cnt then
+          let expanded = PPCtx.Macro.expand macro params in
           List.iter
             (fun tk -> output_string out_ch (PPToken.token_repr tk))
             expanded
-        else raise (Lexer.SyntaxError "Macro Parameter Number not match")
+        else
+          raise
+            (Lexer.SyntaxError
+               (Printf.sprintf "Macro Parameter expected %i but got %i"
+                  macro.m_param_cnt count))
 
   (** Parse with [context] from [filename] to [out_channel] *)
-  let run context =
+  let run context resource =
     let rec _run filename out_channel =
-      let in_ch = In_channel.open_text filename in
-      let lexbuf = Lexing.from_channel in_ch in
-      Lexing.set_filename lexbuf filename;
+      let lexbuf = Resource.lexbuf_from_filename resource filename in
       _mark_line lexbuf.Lexing.lex_curr_p out_channel;
       _print_lnum lexbuf.Lexing.lex_curr_p out_channel;
 
@@ -105,7 +112,9 @@ module Parser = struct
                         Printf.fprintf out_channel "#line %i \"%s\"\n" n m)
                 | Cmd_Include (is_sys, file) ->
                     _act (fun () ->
-                        _run (Resource.fetch_filename is_sys file) out_channel;
+                        _run
+                          (Resource.fetch_filename resource is_sys file)
+                          out_channel;
                         _mark_line cp out_channel)
                 | Cmd_Define1 tok ->
                     _act (fun () -> PPCtx.add_symbol context tok mcp)
@@ -155,9 +164,12 @@ module Parser = struct
       in
       try loop (Lexer.pp_token lexbuf)
       with e ->
-        Printf.eprintf "%s:%i:%i\n" lexbuf.lex_curr_p.pos_fname
-          lexbuf.lex_curr_p.pos_lnum
-          (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol + 1);
+        Printf.eprintf "%s:%i:%i-%i\n" lexbuf.lex_curr_p.pos_fname
+          lexbuf.lex_start_p.pos_lnum
+          (lexbuf.lex_start_p.pos_cnum - lexbuf.lex_start_p.pos_bol + 1)
+          (match lexbuf.lex_curr_p.pos_lnum = lexbuf.lex_start_p.pos_lnum with
+          | true -> lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol + 1
+          | false -> lexbuf.lex_curr_p.pos_bol - lexbuf.lex_start_p.pos_bol);
         raise e
     in
     _run

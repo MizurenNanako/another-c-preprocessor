@@ -37,15 +37,6 @@ module PPCtx = struct
       let f = check_param parameters 1 in
       List.map f replacement
 
-    (* let parse_tokens_from_raw raw =
-      let lexbuf = Lexing.from_string raw in
-      let rec loop (tok : PPToken.pp_token) lst =
-        match tok with
-        | Eof -> lst
-        | x -> loop (Lexer.pp_token lexbuf) (x :: lst)
-      in
-      loop (Lexer.pp_token lexbuf) [] *)
-
     let _body_repr b =
       match b with
       | PLACEHOLDER n -> Printf.sprintf "_%d" n

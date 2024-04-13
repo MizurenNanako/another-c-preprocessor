@@ -13,8 +13,8 @@ module PPToken = struct
     | Punctuator of string
     | Eof
     | Other of string
-    | Cmd_Line1 of int
-    | Cmd_Line2 of int * string
+    | Cmd_Line1 of int (* lineno *)
+    | Cmd_Line2 of int * string (* lineno, filename *)
     | Cmd_Include of bool * string
     | Cmd_Define1 of string (* name *)
     | Cmd_Define2 of string * pp_token list (* name, ctx *)
@@ -44,6 +44,7 @@ module PPToken = struct
     | PPnum a, Identifier b -> Some (PPnum (a ^ b))
     | PPnum a, PPnum b -> Some (PPnum (a ^ b))
     | Punctuator a, Punctuator b -> Some (Punctuator (a ^ b))
-    | Punctuator _, _ -> None
-    | a, b -> raise (ConcatenationError (token_repr a ^ token_repr b))
+    (* | Punctuator _, _ -> None *)
+    (* | a, b -> raise (ConcatenationError (token_repr a ^ token_repr b)) *)
+    | _ -> None
 end
