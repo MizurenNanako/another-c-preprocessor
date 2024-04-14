@@ -34,20 +34,21 @@ let _filename = [^ '!' '#' '%' '&' '*' '+' ':' ';' '<' '\''
                    '=' '>' '?' '[' ']' '^' '{' '|' '}' '\"']
 let filename = _filename+
 let hash = ws* '#' ws*
+let newline = '\n' | ("//" [^ '\n']* '\n')
 
 rule pp_token = parse
 | hash "include" ws* { cmd_include lexbuf }
 | hash "define" ws+  { cmd_define lexbuf }
 | hash "line" ws+    { cmd_line lexbuf }
-| hash "undef" ws+ (identifier as id) ws* ('\n' | eof)
+| hash "undef" ws+ (identifier as id) ws* (newline | eof)
                      { new_line lexbuf; Cmd_Undef id }
-| hash "ifdef" ws+ (identifier as id) ws* ('\n' | eof)
+| hash "ifdef" ws+ (identifier as id) ws* (newline | eof)
                      { new_line lexbuf; Cmd_Ifdef id }
-| hash "ifndef" ws+ (identifier as id) ws* ('\n' | eof)
+| hash "ifndef" ws+ (identifier as id) ws* (newline | eof)
                      { new_line lexbuf; Cmd_Ifndef id }
-| hash "else" ws* ('\n' | eof)
+| hash "else" ws* (newline | eof)
                      { new_line lexbuf; Cmd_Else }
-| hash "endif" ws* ('\n' | eof)
+| hash "endif" ws* (newline | eof)
                      { new_line lexbuf; Cmd_Endif }
 | identifier         { Identifier (lexeme lexbuf) }
 | ppnumber           { PPnum (lexeme lexbuf) }
@@ -57,18 +58,24 @@ rule pp_token = parse
 | ','                { COMMA }
 | punctuator         { Punctuator (lexeme lexbuf) }
 | [' ' '\t']+        { Whitespace (lexbuf.lex_curr_pos - lexbuf.lex_start_pos) }
-| '\n'               { new_line lexbuf; Newline }
-| '\n'? eof          { Eof }
+| newline            { new_line lexbuf; Newline }
+| newline? eof       { Eof }
 (* | _                  { Other (lexeme lexbuf) } *)
+| hash               { _report_unsupport_command lexbuf }
 | _                  { raise (SyntaxError (lexeme lexbuf)) }
 
+and _report_unsupport_command = parse
+| [^ ' ' '\n']*
+    { raise (SyntaxError ("Unsupport: " ^ lexeme lexbuf)) }
+| _ { raise (SyntaxError ("Unsupport: " ^ lexeme lexbuf)) }
+
 and cmd_include = parse
-| '<' (filename as a) '>' ('\n' | eof) { new_line lexbuf; Cmd_Include (true, a) }
-| '\"' (filename as a) '\"' ('\n' | eof) { new_line lexbuf; Cmd_Include (false, a) }
+| '<' (filename as a) '>' (newline | eof) { new_line lexbuf; Cmd_Include (true, a) }
+| '\"' (filename as a) '\"' (newline | eof) { new_line lexbuf; Cmd_Include (false, a) }
 | _ { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_define = parse
-| (identifier as id) ws* ('\n' | eof)
+| (identifier as id) ws* (newline | eof)
     { 
         new_line lexbuf;
         Cmd_Define1 id
@@ -80,15 +87,16 @@ and cmd_define = parse
     }
 | (identifier as id) '('
     {
-        let param, ctx = cmd_define_param [] lexbuf in
-        Cmd_Define3 (id, param, ctx)
+        let param, ctx, variadic = cmd_define_param [] lexbuf in
+        Cmd_Define3 (id, param, ctx, variadic)
     }
 | _ { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_define_param lst = parse
-| identifier as e { cmd_define_param ((Identifier e) :: lst) lexbuf }
-| ws? ',' ws?     { cmd_define_param lst lexbuf }
-| ")" ws*         { (List.rev lst, cmd_define_ctx [] lexbuf) }
+| identifier as e   { cmd_define_param ((Identifier e) :: lst) lexbuf }
+| ws? ',' ws?       { cmd_define_param lst lexbuf }
+| "..." ws* ")" ws* { (List.rev lst, cmd_define_ctx [] lexbuf, true) }
+| ")" ws*           { (List.rev lst, cmd_define_ctx [] lexbuf, false) }
 | _ { raise (SyntaxError ("Invaild macro param: " ^ Lexing.lexeme lexbuf)) }
 
 and cmd_define_ctx lst = parse
@@ -101,11 +109,11 @@ and cmd_define_ctx lst = parse
 | punctuator         { cmd_define_ctx ((Punctuator (lexeme lexbuf))::lst) lexbuf }
 | [' ' '\t']+        { cmd_define_ctx lst lexbuf }
 (* | [' ' '\t']+        { cmd_define_ctx ((Whitespace (lexbuf.lex_curr_pos - lexbuf.lex_start_pos))::lst) lexbuf } *)
-| '\n'? eof| '\n'    { new_line lexbuf; List.rev lst }
+| newline? eof| newline    { new_line lexbuf; List.rev lst }
 | _                  { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_line = parse
-| ((['1' - '9'] digit*) as a) ws+ '\"' ( filename as b) '\"' ws* '\n'
+| ((['1' - '9'] digit*) as a) ws+ '\"' ( filename as b) '\"' ws* newline
          {
             let linenum = int_of_string a in
             let lcp = lexbuf.lex_curr_p in
@@ -118,7 +126,7 @@ and cmd_line = parse
                 };
             Cmd_Line2 (linenum, b)
          }
-| ((['1' - '9'] digit*) as a) ws* '\n'
+| ((['1' - '9'] digit*) as a) ws* newline
          {
             let linenum = int_of_string a in
             let lcp = lexbuf.lex_curr_p in

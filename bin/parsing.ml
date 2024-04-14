@@ -66,10 +66,10 @@ module Parser = struct
       (lexbuf : Lexing.lexbuf) =
     match macro.m_param_cnt with
     | 0 -> (*Just a symbol*) output_string out_ch (PPCtx.Macro.repr macro)
-    | _ ->
+    | n ->
         (* Macro Function, Parse to token lists *)
         let params, count = _get_params lexbuf in
-        if count = macro.m_param_cnt then
+        if count = n || macro.m_variadic then
           let expanded = PPCtx.Macro.expand macro params in
           List.iter
             (fun tk -> output_string out_ch (PPToken.token_repr tk))
@@ -77,8 +77,7 @@ module Parser = struct
         else
           raise
             (Lexer.SyntaxError
-               (Printf.sprintf "Macro Parameter expected %i but got %i"
-                  macro.m_param_cnt count))
+               (Printf.sprintf "Macro Parameter expected %i but got %i" n count))
 
   (** Parse with [context] from [filename] to [out_channel] *)
   let run context resource =
@@ -120,8 +119,8 @@ module Parser = struct
                     _act (fun () -> PPCtx.add_symbol context tok mcp)
                 | Cmd_Define2 (n, tks) ->
                     _act (fun () -> PPCtx.add_macro_parsed context n tks mcp)
-                | Cmd_Define3 (n, p, k) ->
-                    _act (fun () -> PPCtx.add_macro context n p k mcp)
+                | Cmd_Define3 (n, p, k, v) ->
+                    _act (fun () -> PPCtx.add_macro context n p k v mcp)
                 | Cmd_Undef n -> _act (fun () -> PPCtx.remove_symbol context n)
                 | Cmd_Ifdef n -> _act (fun () -> PPCtx.state_ifdef context n)
                 | Cmd_Ifndef n -> _act (fun () -> PPCtx.state_ifndef context n)

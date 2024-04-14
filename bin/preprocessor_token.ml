@@ -12,6 +12,7 @@ module PPToken = struct
     | COMMA (* , *)
     | Punctuator of string
     | Eof
+    | Ellipsis
     | Other of string
     | Cmd_Line1 of int (* lineno *)
     | Cmd_Line2 of int * string (* lineno, filename *)
@@ -19,7 +20,7 @@ module PPToken = struct
     | Cmd_Define1 of string (* name *)
     | Cmd_Define2 of string * pp_token list (* name, ctx *)
     | Cmd_Define3 of
-        string * pp_token list * pp_token list (* name, param, ctx *)
+        string * pp_token list * pp_token list * bool (* name, param, ctx, variadic *)
     | Cmd_Undef of string
     | Cmd_Ifdef of string
     | Cmd_Ifndef of string
@@ -33,6 +34,7 @@ module PPToken = struct
     | LPAREN -> "("
     | RPAREN -> ")"
     | COMMA -> ","
+    | Ellipsis -> "..."
     | Identifier x | PPnum x | Punctuator x | Other x -> x
     | Eof -> "<eof>"
     | _ -> "\n" (* All instructions and newline *)

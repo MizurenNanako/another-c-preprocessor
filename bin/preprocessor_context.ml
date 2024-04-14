@@ -8,6 +8,7 @@ module PPCtx = struct
       m_trigger : string;
       m_body : body_token list;
       m_param_cnt : int;
+      m_variadic : bool;
       pos : Lexing.position;
     }
 
@@ -16,9 +17,16 @@ module PPCtx = struct
       | TOKEN of PPToken.pp_token (* Will remain *)
       | CONCATE
       | STRINGFY
+      | VA_ARGS
 
     let dummy =
-      { m_trigger = ""; m_body = []; m_param_cnt = 0; pos = Lexing.dummy_pos }
+      {
+        m_trigger = "";
+        m_body = [];
+        m_param_cnt = 0;
+        pos = Lexing.dummy_pos;
+        m_variadic = false;
+      }
 
     let compare m1 m2 = Stdlib.compare m1.m_trigger m2.m_trigger
 
@@ -29,6 +37,7 @@ module PPCtx = struct
             match token with
             | Punctuator "##" -> CONCATE
             | Punctuator "#" -> STRINGFY
+            | Identifier "__VA_ARGS__" -> VA_ARGS
             | _ -> TOKEN token)
         | hd :: tl ->
             if hd = token then PLACEHOLDER nth
@@ -43,6 +52,7 @@ module PPCtx = struct
       | TOKEN k -> Printf.sprintf "\"%s\"" (PPToken.token_repr k)
       | CONCATE -> "_CON_"
       | STRINGFY -> "_STR"
+      | VA_ARGS -> "_VA_ARGS_"
 
     let rec _body_list_repr body =
       match body with
@@ -58,12 +68,33 @@ module PPCtx = struct
 
     (** From params to body *)
     let _expand_to_body (t : t) (ptoks : PPToken.pp_token list list) =
-      let f b =
-        match b with
-        | PLACEHOLDER n ->
-            let target = List.nth ptoks (n - 1) in
-            List.map (fun tk -> TOKEN tk) target
-        | k -> [ k ]
+      let f =
+        if t.m_variadic then fun macro_body ->
+          match macro_body with
+          | PLACEHOLDER n ->
+              let target = List.nth ptoks (n - 1) in
+              List.map (fun tk -> TOKEN tk) target
+          | VA_ARGS ->
+              let rec _drop n lst =
+                match n with 0 -> lst | n -> _drop (n - 1) (List.tl lst)
+              in
+              let rec _place_comma lst =
+                match lst with
+                | [] -> []
+                | [ x ] -> [ x ]
+                | hd :: tl ->
+                    hd :: [ PPToken.Punctuator "," ] :: _place_comma tl
+              in
+              let last_elms = _drop t.m_param_cnt ptoks in
+              (* form last elements into one *)
+              let merged = List.concat (_place_comma last_elms) in
+              List.map (fun tk -> TOKEN tk) merged
+          | k -> [ k ]
+        else fun macro_body ->
+          match macro_body with
+          | PLACEHOLDER n ->
+              List.map (fun tk -> TOKEN tk) (List.nth ptoks (n - 1))
+          | k -> [ k ]
       in
       List.concat_map f t.m_body
 
@@ -102,7 +133,13 @@ module PPCtx = struct
   let add_symbol self sym pos =
     self.sym_table <-
       SymbolTable.add
-        { m_trigger = sym; m_body = []; m_param_cnt = 0; pos }
+        {
+          m_trigger = sym;
+          m_body = [];
+          m_param_cnt = 0;
+          m_variadic = false;
+          pos;
+        }
         self.sym_table
 
   let add_macro_parsed self sym syms pos =
@@ -112,17 +149,19 @@ module PPCtx = struct
           m_trigger = sym;
           m_body = List.map (fun tk -> Macro.TOKEN tk) syms;
           m_param_cnt = 0;
+          m_variadic = false;
           pos;
         }
         self.sym_table
 
-  let add_macro self sym param reps pos =
+  let add_macro self sym param reps v pos =
     self.sym_table <-
       SymbolTable.add
         {
           m_trigger = sym;
           m_body = Macro.parse_from_tokens param reps;
           m_param_cnt = List.length param;
+          m_variadic = v;
           pos;
         }
         self.sym_table
