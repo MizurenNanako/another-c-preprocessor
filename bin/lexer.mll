@@ -101,6 +101,8 @@ and cmd_define_param lst = parse
 
 and cmd_define_ctx lst = parse
 | identifier         { cmd_define_ctx ((Identifier (lexeme lexbuf))::lst) lexbuf }
+| '#' ws* (identifier as e)
+                     { cmd_define_ctx ((SIdentifier e)::lst) lexbuf }
 | ppnumber           { cmd_define_ctx ((PPnum (lexeme lexbuf))::lst) lexbuf }
 | ('\"' | '\'') as d { cmd_define_ctx ((pp_string d (Buffer.create 17) lexbuf)::lst) lexbuf }
 | '('                { cmd_define_ctx (LPAREN::lst) lexbuf }
@@ -109,7 +111,8 @@ and cmd_define_ctx lst = parse
 | punctuator         { cmd_define_ctx ((Punctuator (lexeme lexbuf))::lst) lexbuf }
 | [' ' '\t']+        { cmd_define_ctx lst lexbuf }
 (* | [' ' '\t']+        { cmd_define_ctx ((Whitespace (lexbuf.lex_curr_pos - lexbuf.lex_start_pos))::lst) lexbuf } *)
-| newline? eof| newline    { new_line lexbuf; List.rev lst }
+| newline? eof | newline
+                     { new_line lexbuf; List.rev lst }
 | _                  { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_line = parse

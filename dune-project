@@ -18,7 +18,7 @@
 (package
  (name acppo)
  (synopsis "acppo")
- (description "A longer description")
+ (description "Another C Preprocessor")
  (depends ocaml dune)
  (tags
   (topics "to describe" your project)))

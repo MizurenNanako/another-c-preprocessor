@@ -25,7 +25,13 @@ module Parser = struct
                 cnt)
       | RPAREN -> (
           match level with
-          | 1 -> (*End*) (List.rev ptoks, cnt)
+          | 1 ->
+              (*End*)
+              ( List.rev
+                  (match ptoks with
+                  | hd :: tl -> List.rev hd :: tl
+                  | _ -> ptoks),
+                cnt )
           | n ->
               _f
                 (n - 1) (*decreased paren level*)
@@ -65,7 +71,7 @@ module Parser = struct
   let _expand_macro (macro : PPCtx.Macro.t) (out_ch : out_channel)
       (lexbuf : Lexing.lexbuf) =
     match macro.m_param_cnt with
-    | 0 -> (*Just a symbol*) output_string out_ch (PPCtx.Macro.repr macro)
+    | 0 -> (* Just a symbol *) output_string out_ch (PPCtx.Macro.repr macro)
     | n ->
         (* Macro Function, Parse to token lists *)
         let params, count = _get_params lexbuf in
