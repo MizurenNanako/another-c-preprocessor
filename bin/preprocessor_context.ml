@@ -30,8 +30,12 @@ module PPCtx = struct
 
     let compare m1 m2 = Stdlib.compare m1.m_trigger m2.m_trigger
 
+    (** Replace parameter placeholders 
+        in token list [replacement],
+        respecting to token parameter list [parameters],
+        returning macro body *)
     let parse_from_tokens parameters replacement =
-      let rec check_param param (nth : int) (token : PPToken.pp_token) =
+      let rec _replace param (nth : int) (token : PPToken.pp_token) =
         match param with
         | [] -> (
             match token with
@@ -42,9 +46,9 @@ module PPCtx = struct
             match (hd, token) with
             | PPToken.Identifier a, Identifier b when a = b -> PLACEHOLDER nth
             | PPToken.Identifier a, SIdentifier b when a = b -> SPLACEHOLDER nth
-            | _ -> check_param tl (nth + 1) token)
+            | _ -> _replace tl (nth + 1) token)
       in
-      let f = check_param parameters 1 in
+      let f = _replace parameters 1 in
       List.map f replacement
 
     let _body_repr b =
@@ -126,8 +130,11 @@ module PPCtx = struct
       in
       List.rev (f body [])
 
-    let expand (t : t) (ptoks : PPToken.pp_token list list) =
-      let tmp = _expand_to_body t ptoks in
+    (** Expand macro [self] 
+        with parameter of token lists [ptoks], 
+        returns expanded token list. *)
+    let expand self (ptoks : PPToken.pp_token list list) =
+      let tmp = _expand_to_body self ptoks in
       _body_to_tokens tmp
 
     let repr (t : t) =
