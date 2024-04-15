@@ -54,4 +54,16 @@ module PPToken = struct
     (* | Punctuator _, _ -> None *)
     (* | a, b -> raise (ConcatenationError (token_repr a ^ token_repr b)) *)
     | _ -> None
+
+  let token_list_compact_repr lst =
+    let rec _f rmlst =
+      match rmlst with
+      | [] -> []
+      | (Identifier x | PPnum x) :: ((Identifier _ as y) | (PPnum _ as y)) :: tl
+        ->
+          x :: " " :: _f (y :: tl)
+      | hd :: tl -> token_repr hd :: _f tl
+    in
+    let ss = _f lst in
+    String.concat "" ss
 end

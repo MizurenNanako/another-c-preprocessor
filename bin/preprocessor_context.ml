@@ -150,11 +150,7 @@ module PPCtx = struct
         returns expanded string. *)
     let expand self ptoks =
       let stoks =
-        List.map
-          (fun ptok ->
-            let stok = List.map (fun k -> PPToken.token_repr k) ptok in
-            String.concat " " stok)
-          ptoks
+        List.map (fun ptok -> PPToken.token_list_compact_repr ptok) ptoks
       in
       expand_with_str self stoks
   end
