@@ -22,7 +22,7 @@ module PPToken = struct
     | Cmd_Define2 of string * pp_token list (* name, ctx *)
     | Cmd_Define3 of
         string
-        * pp_token list
+        * string list
         * pp_token list
         * bool (* name, param, ctx, variadic *)
     | Cmd_Undef of string

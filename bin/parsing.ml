@@ -71,15 +71,15 @@ module Parser = struct
   let _expand_macro (macro : PPCtx.Macro.t) (out_ch : out_channel)
       (lexbuf : Lexing.lexbuf) =
     match macro.m_param_cnt with
-    | 0 -> (* Just a symbol *) output_string out_ch (PPCtx.Macro.repr macro)
+    | 0 ->
+        (* Just a symbol *)
+        output_string out_ch (PPCtx.Macro.expand_body_raw macro)
     | n ->
         (* Macro Function, Parse to token lists *)
         let params, count = _get_params lexbuf in
         if count = n || macro.m_variadic then
           let expanded = PPCtx.Macro.expand macro params in
-          List.iter
-            (fun tk -> output_string out_ch (PPToken.token_repr tk))
-            expanded
+          output_string out_ch expanded
         else
           raise
             (Lexer.SyntaxError
@@ -121,10 +121,10 @@ module Parser = struct
                           (Resource.fetch_filename resource is_sys file)
                           out_channel;
                         _mark_line cp out_channel)
-                | Cmd_Define1 tok ->
-                    _act (fun () -> PPCtx.add_symbol context tok mcp)
+                | Cmd_Define1 n ->
+                    _act (fun () -> PPCtx.add_symbol_empty context n mcp)
                 | Cmd_Define2 (n, tks) ->
-                    _act (fun () -> PPCtx.add_macro_parsed context n tks mcp)
+                    _act (fun () -> PPCtx.add_symbol context n tks mcp)
                 | Cmd_Define3 (n, p, k, v) ->
                     _act (fun () -> PPCtx.add_macro context n p k v mcp)
                 | Cmd_Undef n -> _act (fun () -> PPCtx.remove_symbol context n)
@@ -141,7 +141,7 @@ module Parser = struct
                         loop (Lexer.pp_token lexbuf)
                     | Some macro ->
                         output_string out_channel "\n";
-                        _mark_line macro.pos out_channel;
+                        _mark_line macro.m_pos out_channel;
                         output_string out_channel
                           (String.make
                              (lexbuf.lex_start_p.pos_cnum

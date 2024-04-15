@@ -93,7 +93,7 @@ and cmd_define = parse
 | _ { raise (SyntaxError (lexeme lexbuf)) }
 
 and cmd_define_param lst = parse
-| identifier as e   { cmd_define_param ((Identifier e) :: lst) lexbuf }
+| identifier as e   { cmd_define_param (e :: lst) lexbuf }
 | ws? ',' ws?       { cmd_define_param lst lexbuf }
 | "..." ws* ")" ws* { (List.rev lst, cmd_define_ctx [] lexbuf, true) }
 | ")" ws*           { (List.rev lst, cmd_define_ctx [] lexbuf, false) }

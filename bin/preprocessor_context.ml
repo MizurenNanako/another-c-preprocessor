@@ -52,27 +52,111 @@ module PPCtx = struct
         (t.m_pos.pos_cnum - t.m_pos.pos_bol + 1)
 
     (** Replace parameter placeholders 
-        in token list [replacement],
+        in Identifier list [replacement],
         respecting to token parameter list [parameters],
         returning macro body *)
-    let parse_from_tokens (parameters : PPToken.pp_token list)
-        (replacement : PPToken.pp_token list) =
-      ignore (parameters, replacement);
-      [TOKEN ""]
+    let parse_from_tokens parameters replacement =
+      let _m p =
+        match List.find_index (fun s -> s = p) parameters with
+        | Some i -> PLACEHOLDER i
+        | None -> TOKEN p
+      in
+      let rec _c acclst rmlst =
+        match rmlst with
+        | [] -> (CONCATE (List.rev acclst), rmlst)
+        | PPToken.Punctuator "##" :: Identifier k :: tl -> (
+            match List.find_index (fun s -> s = k) parameters with
+            | Some i -> _c (i :: acclst) tl
+            | None -> (CONCATE (List.rev acclst), rmlst))
+        | _ :: _ -> (CONCATE (List.rev acclst), rmlst)
+      in
+      let rec _f replst =
+        match replst with
+        | [] -> []
+        | PPToken.Whitespace _ :: tl -> _f tl
+        | Identifier k1 :: Punctuator "##" :: Identifier k2 :: tl -> (
+            match (_m k1, _m k2) with
+            | PLACEHOLDER n1, PLACEHOLDER n2 ->
+                let con, rem = _c [ n2; n1 ] tl in
+                con :: _f rem
+            | a, b -> a :: b :: _f tl)
+        | Identifier a :: tl ->
+            let hd' =
+              match List.find_index (fun s -> s = a) parameters with
+              | Some i -> PLACEHOLDER i
+              | None -> TOKEN a
+            in
+            hd' :: _f tl
+        | SIdentifier a :: tl ->
+            let hd' =
+              match List.find_index (fun s -> s = a) parameters with
+              | Some i -> SPLACEHOLDER i
+              | None -> TOKEN a
+            in
+            hd' :: _f tl
+        | (_ as k) :: tl ->
+            let s = PPToken.token_repr k in
+            let hd' = TOKEN s in
+            hd' :: _f tl
+      in
+      _f replacement
 
-    (** Expand macro [self] 
-        with parameter of token lists [ptoks], 
-        returns expanded string. *)
-    let expand (self : t) (ptoks : PPToken.pp_token list list) =
-      ignore (self, ptoks);
-      ""
+    let expand_body_raw self =
+      let rec _f rm =
+        match rm with
+        | [] -> []
+        | TOKEN s :: tl -> s :: _f tl
+        | _ -> raise (Failure "expand_body_raw")
+      in
+      let ss = _f self.m_body in
+      String.concat " " ss
 
     (** Expand macro [self] 
         with parameter of strings [stoks], 
         returns expanded string. *)
-    let expand_with_str (self : t) (stoks : string list) =
-      ignore (self, stoks);
-      ""
+    let expand_with_str self stoks =
+      let rec _drop l n =
+        match n with
+        | 0 -> l
+        | _ -> (
+            match l with
+            | [] -> raise (Invalid_argument "_drop")
+            | _ :: tl -> _drop tl (n - 1))
+      in
+      let va_args =
+        match List.length stoks - self.m_param_cnt with
+        | 0 -> ""
+        | n ->
+            let rm = _drop stoks n in
+            String.concat "," rm
+      in
+      let rec _f rmbody =
+        match rmbody with
+        | [] -> []
+        | TOKEN s :: tl -> s :: _f tl
+        | PLACEHOLDER n :: tl -> List.nth stoks n :: _f tl
+        | SPLACEHOLDER n :: tl ->
+            Printf.sprintf "\"%s\"" (List.nth stoks n) :: _f tl
+        | CONCATE l :: tl ->
+            let scon = List.map (fun n -> List.nth stoks n) l in
+            String.concat "" scon :: _f tl
+        | VA_ARGS :: tl -> va_args :: _f tl
+      in
+      let strs = _f self.m_body in
+      String.concat " " strs
+
+    (** Expand macro [self] 
+        with parameter of token lists [ptoks], 
+        returns expanded string. *)
+    let expand self ptoks =
+      let stoks =
+        List.map
+          (fun ptok ->
+            let stok = List.map (fun k -> PPToken.token_repr k) ptok in
+            String.concat " " stok)
+          ptoks
+      in
+      expand_with_str self stoks
   end
 
   module SymbolTable = Set.Make (Macro)
