@@ -92,3 +92,7 @@ let punctuator = ['!' '#' '%' '&' '*'
 let lparen = '('
 let rparen = ')'
 ```
+
+## More
+
+In main branch I have already implanted an weak example of macro expansion, but it's too weak to expand more than one time for each macro. So I will reforge the macro system in dev branch this time.

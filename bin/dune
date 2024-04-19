@@ -1,11 +1,27 @@
-(ocamllex lexer)
+(ocamllex PPLexer)
 
-; (menhir
-;  (modules parser)
-;  (flags --dump)
-;  (infer true))
+(menhir
+ (modules PPParser)
+ (infer true)
+ (flags --dump --only-tokens))
+
+(library
+ (name pp_parser)
+ (modules PPParser))
+
+(library
+ (name pp_utils)
+ (modules PPUtils))
+
+(library
+ (name pp_context)
+ (modules PPContext))
+
+(library
+ (name pp_resource)
+ (modules PPResource))
 
 (executable
- (public_name acppo)
  (name main)
- (libraries acppo))
+ (public_name acppo)
+ (modules Main))
